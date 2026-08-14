@@ -1,17 +1,22 @@
-import { getStore } from "@netlify/blobs";
-import { calculateTotal, products } from "../../catalog";
+import { calculateTotal } from "../../catalog";
+import {
+  findProductReservation,
+  loadCatalogProducts,
+  loadProductReservations,
+  reservationKeyForProduct,
+  reservationsStore,
+} from "../../../lib/catalog-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const STORE_NAME = "kipa-kedma-reservations";
-const RESERVED_PREFIX = "reserved/";
 const REQUEST_PREFIX = "requests/";
 
 type ReservationPayload = {
   name?: string;
   phone?: string;
   note?: string;
+  productIds?: string[];
   skus?: string[];
 };
 
@@ -20,30 +25,27 @@ type ReservationRecord = {
   customerName: string;
   phone: string;
   note: string;
+  productIds: string[];
   skus: string[];
   total: number;
   status: "pending";
   createdAt: string;
 };
 
-function reservationsStore() {
-  return getStore({ name: STORE_NAME, consistency: "strong" });
-}
-
-function reservationKey(sku: string) {
-  return `${RESERVED_PREFIX}${sku}`;
-}
-
 export async function GET() {
   try {
-    const store = reservationsStore();
-    const result = await store.list({ prefix: RESERVED_PREFIX });
+    const products = await loadCatalogProducts();
+    const reservations = await loadProductReservations(products);
+    const reservedIds = new Set(
+      reservations.map((reservation) => reservation.productId),
+    );
 
     return Response.json(
       {
-        reservedSkus: result.blobs.map(({ key }) =>
-          key.slice(RESERVED_PREFIX.length),
-        ),
+        unavailableProductIds: [...reservedIds],
+        reservedSkus: products
+          .filter((product) => reservedIds.has(product.id))
+          .map((product) => product.sku),
       },
       { headers: { "Cache-Control": "no-store" } },
     );
@@ -63,9 +65,18 @@ export async function POST(request: Request) {
     const name = payload.name?.trim().slice(0, 120) ?? "";
     const phone = payload.phone?.trim().slice(0, 40) ?? "";
     const note = payload.note?.trim().slice(0, 500) ?? "";
-    const skus = [...new Set(payload.skus ?? [])];
-    const knownProducts = skus
-      .map((sku) => products.find((product) => product.sku === sku))
+    const products = await loadCatalogProducts();
+    const requestedIds = payload.productIds?.length
+      ? [...new Set(payload.productIds)]
+      : [
+          ...new Set(
+            (payload.skus ?? [])
+              .map((sku) => products.find((product) => product.sku === sku)?.id)
+              .filter((id): id is string => Boolean(id)),
+          ),
+        ];
+    const knownProducts = requestedIds
+      .map((id) => products.find((product) => product.id === id))
       .filter((product) => product !== undefined);
 
     if (name.length < 2) {
@@ -77,7 +88,11 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    if (!skus.length || knownProducts.length !== skus.length) {
+    if (
+      !requestedIds.length ||
+      knownProducts.length !== requestedIds.length ||
+      knownProducts.some((product) => !product.enabled)
+    ) {
       return Response.json(
         { error: "יש לבחור לפחות כיפה אחת זמינה." },
         { status: 400 },
@@ -93,50 +108,63 @@ export async function POST(request: Request) {
       customerName: name,
       phone,
       note,
-      skus,
+      productIds: knownProducts.map((product) => product.id),
+      skus: knownProducts.map((product) => product.sku),
       total,
       status: "pending",
       createdAt,
     };
 
-    for (const sku of skus) {
+    for (const product of knownProducts) {
+      const existingReservation = await findProductReservation(product);
+      if (existingReservation) {
+        await Promise.all(
+          reservedByThisRequest.map((key) => store.delete(key)),
+        );
+        return Response.json(
+          {
+            error:
+              "אחת הכיפות כבר נבחרה על ידי מישהו אחר. עדכנו את הבחירה ונסו שוב.",
+            unavailableProductIds: [product.id],
+            unavailableSkus: [product.sku],
+          },
+          { status: 409 },
+        );
+      }
+
+      const key = reservationKeyForProduct(product.id);
       const result = await store.setJSON(
-        reservationKey(sku),
+        key,
         { requestId: id, createdAt },
         { onlyIfNew: true },
       );
 
       if (!result.modified) {
         await Promise.all(
-          reservedByThisRequest.map((reservedSku) =>
-            store.delete(reservationKey(reservedSku)),
-          ),
+          reservedByThisRequest.map((reservedKey) => store.delete(reservedKey)),
         );
-
         return Response.json(
           {
             error:
               "אחת הכיפות כבר נבחרה על ידי מישהו אחר. עדכנו את הבחירה ונסו שוב.",
-            unavailableSkus: [sku],
+            unavailableProductIds: [product.id],
+            unavailableSkus: [product.sku],
           },
           { status: 409 },
         );
       }
 
-      reservedByThisRequest.push(sku);
+      reservedByThisRequest.push(key);
     }
 
     await store.setJSON(`${REQUEST_PREFIX}${id}`, record, { onlyIfNew: true });
-
     return Response.json({ requestId: id, total }, { status: 201 });
   } catch {
     if (reservedByThisRequest.length) {
       try {
         const store = reservationsStore();
         await Promise.all(
-          reservedByThisRequest.map((sku) =>
-            store.delete(reservationKey(sku)),
-          ),
+          reservedByThisRequest.map((key) => store.delete(key)),
         );
       } catch {
         // Preserve the original response if cleanup itself fails.

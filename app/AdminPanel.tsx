@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import {
   FormEvent,
   useCallback,
@@ -7,40 +8,59 @@ import {
   useMemo,
   useState,
 } from "react";
-import { products } from "./catalog";
+import type { Product } from "./catalog";
 
 type ReservationRequest = {
   id: string;
   customerName: string;
   phone: string;
   note: string;
+  productIds?: string[];
   skus: string[];
   total: number;
   status: "pending";
   createdAt: string;
 };
 
-type ReservedItem = {
+type AdminProduct = Product & {
+  reserved: boolean;
+  available: boolean;
+  reservation: { requestId: string; createdAt: string } | null;
+};
+
+type ReleasedItem = {
+  productId?: string;
   sku: string;
   requestId: string;
   createdAt: string;
-};
-
-type ReleasedItem = ReservedItem & {
   releasedAt: string;
 };
 
 type AdminData = {
   authenticated: true;
+  products: AdminProduct[];
   requests: ReservationRequest[];
-  reserved: ReservedItem[];
   releases: ReleasedItem[];
 };
 
 type AdminPanelProps = {
   open: boolean;
   onClose: () => void;
-  onRestore: (sku: string) => void;
+  onCatalogChange: () => void;
+};
+
+type ProductEditorProps = {
+  product: AdminProduct;
+  customer?: ReservationRequest;
+  busy: boolean;
+  onSave: (payload: {
+    id: string;
+    name: string;
+    sku: string;
+    price: number;
+    diameter: number;
+  }) => Promise<void>;
+  onToggle: (product: AdminProduct) => Promise<void>;
 };
 
 const dateFormatter = new Intl.DateTimeFormat("he-IL", {
@@ -53,17 +73,104 @@ function formatDate(value: string) {
   return Number.isNaN(date.getTime()) ? value : dateFormatter.format(date);
 }
 
-function productName(sku: string) {
-  return products.find((product) => product.sku === sku)?.name ?? sku;
+function ProductEditor({
+  product,
+  customer,
+  busy,
+  onSave,
+  onToggle,
+}: ProductEditorProps) {
+  const [name, setName] = useState(product.name);
+  const [sku, setSku] = useState(product.sku);
+  const [price, setPrice] = useState(String(product.price));
+  const [diameter, setDiameter] = useState(String(product.diameter));
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await onSave({
+      id: product.id,
+      name,
+      sku,
+      price: Number(price),
+      diameter: Number(diameter),
+    });
+  }
+
+  return (
+    <article className={`admin-product-card${product.available ? " is-active" : " is-inactive"}`}>
+      <div className="admin-product-photo">
+        <Image src={product.image} alt="" fill unoptimized sizes="96px" />
+        <span className={product.available ? "active" : "inactive"}>
+          {product.available ? "פעילה" : product.reserved ? "נבחרה" : "כבויה"}
+        </span>
+      </div>
+
+      <form onSubmit={save}>
+        <div className="admin-product-heading">
+          <div>
+            <small>{product.colorLabel}</small>
+            <strong>{product.name}</strong>
+          </div>
+          <button
+            className={`admin-status-button ${product.available ? "deactivate" : "activate"}`}
+            type="button"
+            disabled={busy}
+            onClick={() => void onToggle(product)}
+          >
+            {product.available
+              ? "כיבוי"
+              : product.reserved
+                ? "הפעלה והחזרה למלאי"
+                : "הפעלה"}
+          </button>
+        </div>
+
+        {product.reserved && (
+          <p className="admin-reservation-note">
+            הכיפה נשמרה {customer ? `עבור ${customer.customerName}` : "בהזמנה"}
+            {product.reservation ? ` בתאריך ${formatDate(product.reservation.createdAt)}` : ""}.
+          </p>
+        )}
+
+        <div className="admin-product-fields">
+          <label className="wide">
+            שם הכיפה
+            <input value={name} onChange={(event) => setName(event.target.value)} minLength={2} maxLength={80} required />
+          </label>
+          <label>
+            מק״ט
+            <input value={sku} onChange={(event) => setSku(event.target.value)} minLength={2} maxLength={32} dir="ltr" required />
+          </label>
+          <label>
+            מחיר בש״ח
+            <input value={price} onChange={(event) => setPrice(event.target.value)} type="number" min="1" max="5000" step="1" required />
+          </label>
+          <label>
+            קוטר בס״מ
+            <input value={diameter} onChange={(event) => setDiameter(event.target.value)} type="number" min="1" max="50" step="0.1" required />
+          </label>
+        </div>
+
+        <button className="admin-save-product" type="submit" disabled={busy}>
+          {busy ? "שומרת..." : "שמירת פרטי הכיפה"}
+        </button>
+      </form>
+    </article>
+  );
 }
 
-export default function AdminPanel({ open, onClose, onRestore }: AdminPanelProps) {
+export default function AdminPanel({
+  open,
+  onClose,
+  onCatalogChange,
+}: AdminPanelProps) {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [data, setData] = useState<AdminData | null>(null);
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [messageKind, setMessageKind] = useState<"error" | "success">("error");
   const [loading, setLoading] = useState(false);
-  const [reactivatingSku, setReactivatingSku] = useState("");
+  const [busyProductId, setBusyProductId] = useState("");
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -80,6 +187,7 @@ export default function AdminPanel({ open, onClose, onRestore }: AdminPanelProps
       setAuthenticated(true);
       setData(result);
     } catch (error) {
+      setMessageKind("error");
       setMessage(error instanceof Error ? error.message : "לא הצלחנו לטעון את הנתונים.");
     } finally {
       setLoading(false);
@@ -100,6 +208,14 @@ export default function AdminPanel({ open, onClose, onRestore }: AdminPanelProps
     () => new Map((data?.requests ?? []).map((request) => [request.id, request])),
     [data],
   );
+  const productsById = useMemo(
+    () => new Map((data?.products ?? []).map((product) => [product.id, product])),
+    [data],
+  );
+  const productsBySku = useMemo(
+    () => new Map((data?.products ?? []).map((product) => [product.sku, product])),
+    [data],
+  );
 
   if (!open) return null;
 
@@ -115,12 +231,14 @@ export default function AdminPanel({ open, onClose, onRestore }: AdminPanelProps
       });
       const result = (await response.json()) as { error?: string };
       if (!response.ok) {
+        setMessageKind("error");
         setMessage(result.error ?? "לא הצלחנו להתחבר.");
         return;
       }
       setPassword("");
       await refresh();
     } catch {
+      setMessageKind("error");
       setMessage("לא הצלחנו להתחבר. נסו שוב.");
     } finally {
       setLoading(false);
@@ -134,28 +252,64 @@ export default function AdminPanel({ open, onClose, onRestore }: AdminPanelProps
     setMessage("");
   }
 
-  async function reactivate(sku: string) {
-    setReactivatingSku(sku);
+  async function saveProduct(payload: {
+    id: string;
+    name: string;
+    sku: string;
+    price: number;
+    diameter: number;
+  }) {
+    setBusyProductId(payload.id);
     setMessage("");
     try {
       const response = await fetch("/api/admin/reservations", {
-        method: "DELETE",
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sku }),
+        body: JSON.stringify(payload),
       });
       const result = (await response.json()) as { error?: string };
-      if (!response.ok) {
-        setMessage(result.error ?? "לא הצלחנו להחזיר את הכיפה למלאי.");
-        return;
-      }
-      onRestore(sku);
+      if (!response.ok) throw new Error(result.error ?? "לא הצלחנו לשמור את הכיפה.");
       await refresh();
-    } catch {
-      setMessage("לא הצלחנו להחזיר את הכיפה למלאי.");
+      onCatalogChange();
+      setMessageKind("success");
+      setMessage("פרטי הכיפה נשמרו והקטלוג עודכן.");
+    } catch (error) {
+      setMessageKind("error");
+      setMessage(error instanceof Error ? error.message : "לא הצלחנו לשמור את הכיפה.");
     } finally {
-      setReactivatingSku("");
+      setBusyProductId("");
     }
   }
+
+  async function toggleProduct(product: AdminProduct) {
+    setBusyProductId(product.id);
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/reservations", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: product.id, active: !product.available }),
+      });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "לא הצלחנו לשנות את מצב הכיפה.");
+      await refresh();
+      onCatalogChange();
+      setMessageKind("success");
+      setMessage(
+        product.available
+          ? "הכיפה כובתה והוסרה מהקטלוג."
+          : "הכיפה הופעלה והיא זמינה שוב בקטלוג.",
+      );
+    } catch (error) {
+      setMessageKind("error");
+      setMessage(error instanceof Error ? error.message : "לא הצלחנו לשנות את מצב הכיפה.");
+    } finally {
+      setBusyProductId("");
+    }
+  }
+
+  const activeCount = data?.products.filter((product) => product.available).length ?? 0;
+  const inactiveCount = (data?.products.length ?? 0) - activeCount;
 
   return (
     <div className="admin-backdrop" role="presentation" onMouseDown={(event) => {
@@ -174,7 +328,7 @@ export default function AdminPanel({ open, onClose, onRestore }: AdminPanelProps
           <form className="admin-login" onSubmit={login}>
             <span className="admin-lock" aria-hidden="true">●</span>
             <h3>כניסה למנהלת הקטלוג</h3>
-            <p>הזינו את הסיסמה כדי לצפות בהזמנות ולנהל את זמינות הכיפות.</p>
+            <p>הזינו את הסיסמה כדי לצפות בהזמנות ולנהל את הכיפות.</p>
             <label>
               סיסמה
               <input
@@ -186,7 +340,7 @@ export default function AdminPanel({ open, onClose, onRestore }: AdminPanelProps
                 autoFocus
               />
             </label>
-            {message && <p className="admin-message" role="alert">{message}</p>}
+            {message && <p className={`admin-message ${messageKind}`} role="alert">{message}</p>}
             <button className="admin-primary" type="submit" disabled={loading}>
               {loading ? "מתחברת..." : "כניסה מאובטחת"}
             </button>
@@ -195,8 +349,8 @@ export default function AdminPanel({ open, onClose, onRestore }: AdminPanelProps
           <div className="admin-content">
             <div className="admin-toolbar">
               <div className="admin-stats">
-                <article><span>כיפות פעילות</span><strong>{products.length - (data?.reserved.length ?? 0)}</strong></article>
-                <article><span>כיפות שמורות</span><strong>{data?.reserved.length ?? 0}</strong></article>
+                <article><span>כיפות פעילות</span><strong>{activeCount}</strong></article>
+                <article><span>כיפות לא פעילות</span><strong>{inactiveCount}</strong></article>
                 <article><span>בקשות שנשמרו</span><strong>{data?.requests.length ?? 0}</strong></article>
               </div>
               <div className="admin-tools">
@@ -205,38 +359,28 @@ export default function AdminPanel({ open, onClose, onRestore }: AdminPanelProps
               </div>
             </div>
 
-            {message && <p className="admin-message" role="alert">{message}</p>}
+            {message && <p className={`admin-message ${messageKind}`} role="status">{message}</p>}
 
-            <section className="admin-section">
+            <section className="admin-section admin-inventory-section">
               <div className="admin-section-title">
-                <div><span>מלאי</span><h3>כיפות שאינן פעילות כרגע</h3></div>
-                <small>{data?.reserved.length ?? 0} פריטים</small>
+                <div><span>מלאי</span><h3>עריכת כל הכיפות</h3></div>
+                <small>{data?.products.length ?? 0} פריטים</small>
               </div>
-              {data?.reserved.length ? (
-                <div className="admin-reserved-list">
-                  {data.reserved.map((item) => {
-                    const customer = requestsById.get(item.requestId);
-                    return (
-                      <article key={item.sku}>
-                        <div>
-                          <strong>{productName(item.sku)}</strong>
-                          <span>{item.sku} · {formatDate(item.createdAt)}</span>
-                          {customer && <small>{customer.customerName} · {customer.phone}</small>}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => void reactivate(item.sku)}
-                          disabled={reactivatingSku === item.sku}
-                        >
-                          {reactivatingSku === item.sku ? "מחזירה..." : "החזרה למלאי"}
-                        </button>
-                      </article>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="admin-empty">כל הכיפות פעילות ומוצגות בקטלוג.</p>
-              )}
+              <p className="admin-section-help">
+                שינוי שם, מחיר, קוטר או מק״ט נשמר מיד במסד הנתונים. הפעלת כיפה שנבחרה מחזירה אותה למלאי.
+              </p>
+              <div className="admin-product-grid">
+                {data?.products.map((product) => (
+                  <ProductEditor
+                    key={`${product.id}-${product.name}-${product.sku}-${product.price}-${product.diameter}-${product.available}`}
+                    product={product}
+                    customer={product.reservation ? requestsById.get(product.reservation.requestId) : undefined}
+                    busy={busyProductId === product.id}
+                    onSave={saveProduct}
+                    onToggle={toggleProduct}
+                  />
+                ))}
+              </div>
             </section>
 
             <section className="admin-section">
@@ -253,7 +397,12 @@ export default function AdminPanel({ open, onClose, onRestore }: AdminPanelProps
                         <time>{formatDate(request.createdAt)}</time>
                       </div>
                       <div className="admin-request-skus">
-                        {request.skus.map((sku) => <span key={sku}>{sku} · {productName(sku)}</span>)}
+                        {request.skus.map((sku, index) => {
+                          const product = request.productIds?.[index]
+                            ? productsById.get(request.productIds[index])
+                            : productsBySku.get(sku);
+                          return <span key={`${sku}-${index}`}>{sku} · {product?.name ?? "כיפה"}</span>;
+                        })}
                       </div>
                       <div className="admin-request-foot">
                         <strong>{request.total} ש״ח</strong>
@@ -274,13 +423,18 @@ export default function AdminPanel({ open, onClose, onRestore }: AdminPanelProps
               </div>
               {data?.releases.length ? (
                 <div className="admin-history-list">
-                  {data.releases.map((item, index) => (
-                    <p key={`${item.sku}-${item.releasedAt}-${index}`}>
-                      <strong>{item.sku}</strong>
-                      <span>{productName(item.sku)}</span>
-                      <time>{formatDate(item.releasedAt)}</time>
-                    </p>
-                  ))}
+                  {data.releases.map((item, index) => {
+                    const product = item.productId
+                      ? productsById.get(item.productId)
+                      : productsBySku.get(item.sku);
+                    return (
+                      <p key={`${item.sku}-${item.releasedAt}-${index}`}>
+                        <strong>{item.sku}</strong>
+                        <span>{product?.name ?? "כיפה"}</span>
+                        <time>{formatDate(item.releasedAt)}</time>
+                      </p>
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="admin-empty">עדיין לא הוחזרו כיפות למלאי.</p>

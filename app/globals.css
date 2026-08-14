@@ -1645,6 +1645,12 @@ footer a {
   padding: 10px 12px;
 }
 
+.admin-message.success {
+  background: rgba(85, 125, 98, 0.12);
+  border-color: rgba(85, 125, 98, 0.22);
+  color: #315d42;
+}
+
 .admin-content {
   max-height: calc(100svh - 148px);
   overflow-y: auto;
@@ -1728,6 +1734,189 @@ footer a {
 .admin-section-title small {
   color: var(--ink-soft);
   font-size: 9px;
+}
+
+.admin-section-help {
+  color: var(--ink-soft);
+  font-size: 10px;
+  line-height: 1.65;
+  margin: -5px 0 16px;
+}
+
+.admin-product-grid {
+  display: grid;
+  gap: 13px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-product-card {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  display: grid;
+  gap: 15px;
+  grid-template-columns: 96px minmax(0, 1fr);
+  overflow: hidden;
+  padding: 12px;
+  position: relative;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.admin-product-card.is-active {
+  border-color: rgba(85, 125, 98, 0.32);
+}
+
+.admin-product-card.is-inactive {
+  background: rgba(246, 240, 228, 0.62);
+}
+
+.admin-product-photo {
+  align-self: start;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+}
+
+.admin-product-photo img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.admin-product-photo > span {
+  backdrop-filter: blur(8px);
+  border-radius: 100px;
+  bottom: 7px;
+  color: white;
+  font-size: 8px;
+  left: 7px;
+  padding: 5px 7px;
+  position: absolute;
+  right: 7px;
+  text-align: center;
+}
+
+.admin-product-photo > span.active {
+  background: rgba(45, 108, 70, 0.88);
+}
+
+.admin-product-photo > span.inactive {
+  background: rgba(111, 63, 50, 0.88);
+}
+
+.admin-product-card form {
+  min-width: 0;
+}
+
+.admin-product-heading {
+  align-items: start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.admin-product-heading > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.admin-product-heading small {
+  color: var(--ink-soft);
+  font-size: 8px;
+}
+
+.admin-product-heading strong {
+  font-size: 13px;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-status-button {
+  border: 1px solid;
+  border-radius: 100px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-size: 8px;
+  padding: 7px 9px;
+}
+
+.admin-status-button.deactivate {
+  background: transparent;
+  border-color: rgba(197, 95, 66, 0.28);
+  color: #8d3723;
+}
+
+.admin-status-button.activate {
+  background: #315d42;
+  border-color: #315d42;
+  color: white;
+}
+
+.admin-status-button:disabled,
+.admin-save-product:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.admin-reservation-note {
+  background: rgba(214, 162, 49, 0.12);
+  border-radius: 8px;
+  color: #70500f;
+  font-size: 8px;
+  line-height: 1.5;
+  margin: 9px 0 0;
+  padding: 7px 8px;
+}
+
+.admin-product-fields {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 11px;
+}
+
+.admin-product-fields label {
+  color: var(--ink-soft);
+  display: flex;
+  flex-direction: column;
+  font-size: 8px;
+  gap: 4px;
+}
+
+.admin-product-fields label.wide {
+  grid-column: 1 / -1;
+}
+
+.admin-product-fields input {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  min-width: 0;
+  outline: 0;
+  padding: 8px;
+  width: 100%;
+}
+
+.admin-product-fields input:focus {
+  border-color: var(--terracotta);
+  box-shadow: 0 0 0 3px rgba(197, 95, 66, 0.09);
+}
+
+.admin-save-product {
+  background: transparent;
+  border: 1px solid var(--ink);
+  border-radius: 100px;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 8px;
+  margin-top: 10px;
+  padding: 8px 11px;
+  width: 100%;
 }
 
 .admin-reserved-list,
@@ -2593,6 +2782,34 @@ footer a {
   .admin-reserved-list,
   .admin-request-list {
     grid-template-columns: 1fr;
+  }
+
+  .admin-product-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-product-card {
+    gap: 11px;
+    grid-template-columns: 78px minmax(0, 1fr);
+    padding: 10px;
+  }
+
+  .admin-product-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-product-fields label.wide,
+  .admin-product-fields label:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .admin-product-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-status-button {
+    align-self: start;
   }
 
   .admin-history-list p {

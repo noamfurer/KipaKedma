@@ -2,7 +2,7 @@
 
 import { FormEvent, type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { calculateTotal, colorFamilies, products, type Product } from "./catalog";
+import { calculateTotal, colorFamilies, type Product } from "./catalog";
 import AdminPanel from "./AdminPanel";
 
 const WHATSAPP_NUMBER = "972505782058";
@@ -13,8 +13,9 @@ function formatPrice(value: number) {
 
 export default function Home() {
   const [activeFamily, setActiveFamily] = useState("הכול");
-  const [selectedSkus, setSelectedSkus] = useState<string[]>([]);
-  const [reservedSkus, setReservedSkus] = useState<Set<string>>(new Set());
+  const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [unavailableProductIds, setUnavailableProductIds] = useState<Set<string>>(new Set());
   const [availabilityStatus, setAvailabilityStatus] = useState<"loading" | "ready" | "error">("loading");
   const [cartOpen, setCartOpen] = useState(false);
   const [name, setName] = useState("");
@@ -26,10 +27,23 @@ export default function Home() {
 
   const loadAvailability = useCallback(async () => {
     try {
-      const response = await fetch("/api/reservations", { cache: "no-store" });
+      const response = await fetch("/api/catalog", { cache: "no-store" });
       if (!response.ok) throw new Error("availability");
-      const data = (await response.json()) as { reservedSkus?: string[] };
-      setReservedSkus(new Set(data.reservedSkus ?? []));
+      const data = (await response.json()) as {
+        products?: Product[];
+        unavailableProductIds?: string[];
+      };
+      const nextProducts = data.products ?? [];
+      const nextUnavailable = new Set(data.unavailableProductIds ?? []);
+      setCatalogProducts(nextProducts);
+      setUnavailableProductIds(nextUnavailable);
+      setSelectedProductIds((current) =>
+        current.filter((id) =>
+          nextProducts.some(
+            (product) => product.id === id && product.enabled && !nextUnavailable.has(id),
+          ),
+        ),
+      );
       setAvailabilityStatus("ready");
     } catch {
       setAvailabilityStatus("error");
@@ -47,30 +61,31 @@ export default function Home() {
   }, [cartOpen]);
 
   const visibleProducts = useMemo(
-    () => products.filter(
+    () => catalogProducts.filter(
       (product) =>
-        !reservedSkus.has(product.sku) &&
+        product.enabled &&
+        !unavailableProductIds.has(product.id) &&
         (activeFamily === "הכול" || product.colorFamily === activeFamily),
     ),
-    [activeFamily, reservedSkus],
+    [activeFamily, catalogProducts, unavailableProductIds],
   );
 
   const selectedProducts = useMemo(
     () =>
-      selectedSkus
-        .map((sku) => products.find((product) => product.sku === sku))
+      selectedProductIds
+        .map((id) => catalogProducts.find((product) => product.id === id))
         .filter((product): product is Product => Boolean(product)),
-    [selectedSkus],
+    [catalogProducts, selectedProductIds],
   );
 
   const total = calculateTotal(selectedProducts);
 
   function toggleProduct(product: Product) {
-    if (reservedSkus.has(product.sku)) return;
-    setSelectedSkus((current) =>
-      current.includes(product.sku)
-        ? current.filter((sku) => sku !== product.sku)
-        : [...current, product.sku],
+    if (unavailableProductIds.has(product.id) || !product.enabled) return;
+    setSelectedProductIds((current) =>
+      current.includes(product.id)
+        ? current.filter((id) => id !== product.id)
+        : [...current, product.id],
     );
   }
 
@@ -78,7 +93,7 @@ export default function Home() {
     event.preventDefault();
     setFormMessage("");
 
-    if (!selectedSkus.length) {
+    if (!selectedProductIds.length) {
       setFormMessage("בחרו לפחות כיפה אחת לפני שממשיכים.");
       return;
     }
@@ -88,25 +103,26 @@ export default function Home() {
       const response = await fetch("/api/reservations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, phone, note, skus: selectedSkus }),
+        body: JSON.stringify({ name, phone, note, productIds: selectedProductIds }),
       });
       const data = (await response.json()) as {
         error?: string;
+        unavailableProductIds?: string[];
         unavailableSkus?: string[];
         total?: number;
       };
 
       if (!response.ok) {
-        if (data.unavailableSkus?.length) {
-          const unavailable = new Set(data.unavailableSkus);
-          setReservedSkus((current) => new Set([...current, ...unavailable]));
-          setSelectedSkus((current) => current.filter((sku) => !unavailable.has(sku)));
+        if (data.unavailableProductIds?.length) {
+          const unavailable = new Set(data.unavailableProductIds);
+          setUnavailableProductIds((current) => new Set([...current, ...unavailable]));
+          setSelectedProductIds((current) => current.filter((id) => !unavailable.has(id)));
         }
         setFormMessage(data.error ?? "לא הצלחנו לשמור את הבקשה. נסו שוב בעוד רגע.");
         return;
       }
 
-      setReservedSkus((current) => new Set([...current, ...selectedSkus]));
+      setUnavailableProductIds((current) => new Set([...current, ...selectedProductIds]));
       const itemLines = selectedProducts
         .map(
           (product) =>
@@ -156,7 +172,7 @@ export default function Home() {
           </button>
           <button className="header-cart" type="button" onClick={() => setCartOpen(true)}>
             הבחירה שלי
-            <span>{selectedSkus.length}</span>
+            <span>{selectedProductIds.length}</span>
           </button>
         </div>
       </header>
@@ -255,12 +271,12 @@ export default function Home() {
           <>
             <div className="product-grid">
               {visibleProducts.map((product, index) => {
-            const selected = selectedSkus.includes(product.sku);
-            const reserved = reservedSkus.has(product.sku);
+            const selected = selectedProductIds.includes(product.id);
+            const reserved = unavailableProductIds.has(product.id);
             return (
               <article
                 className={`product-card${selected ? " selected" : ""}${reserved ? " reserved" : ""}`}
-                key={product.sku}
+                key={product.id}
                 style={{ "--accent": product.accent, "--index": index } as CSSProperties}
               >
                 <div className="product-image">
@@ -352,9 +368,9 @@ export default function Home() {
         <a href={`https://wa.me/${WHATSAPP_NUMBER}`}>ליצירת קשר בוואטסאפ</a>
       </footer>
 
-      {selectedSkus.length > 0 && !cartOpen && (
+      {selectedProductIds.length > 0 && !cartOpen && (
         <button className="floating-cart" type="button" onClick={() => setCartOpen(true)}>
-          <span className="floating-count">{selectedSkus.length}</span>
+          <span className="floating-count">{selectedProductIds.length}</span>
           <span>הבחירה שלי</span>
           <strong>{formatPrice(total)}</strong>
           <i aria-hidden="true">←</i>
@@ -413,13 +429,7 @@ export default function Home() {
       <AdminPanel
         open={adminOpen}
         onClose={() => setAdminOpen(false)}
-        onRestore={(sku) => {
-          setReservedSkus((current) => {
-            const next = new Set(current);
-            next.delete(sku);
-            return next;
-          });
-        }}
+        onCatalogChange={() => void loadAvailability()}
       />
     </main>
   );
