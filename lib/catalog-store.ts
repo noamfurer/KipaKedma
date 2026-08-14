@@ -6,7 +6,7 @@ export const RESERVATIONS_STORE_NAME = "kipa-kedma-reservations";
 
 export type ProductOverride = Pick<
   Product,
-  "name" | "sku" | "diameter" | "price" | "enabled"
+  "name" | "sku" | "diameter" | "price" | "enabled" | "colorFamily"
 > & {
   updatedAt: string;
 };
