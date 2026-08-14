@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { calculateTotal, colorFamilies, type Product } from "./catalog";
 import AdminPanel from "./AdminPanel";
@@ -12,6 +12,7 @@ function formatPrice(value: number) {
 }
 
 export default function Home() {
+  const mainRef = useRef<HTMLElement>(null);
   const [activeFamily, setActiveFamily] = useState("הכול");
   const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
@@ -59,6 +60,36 @@ export default function Home() {
     document.body.classList.toggle("drawer-is-open", cartOpen);
     return () => document.body.classList.remove("drawer-is-open");
   }, [cartOpen]);
+
+  useEffect(() => {
+    let frame = 0;
+
+    const updateBackground = () => {
+      const scrollRange = Math.max(
+        1,
+        document.documentElement.scrollHeight - window.innerHeight,
+      );
+      const progress = Math.min(1, Math.max(0, window.scrollY / scrollRange));
+      const bottomReveal = Math.min(1, Math.max(0, (progress - 0.76) / 0.24));
+      const easedReveal = bottomReveal * bottomReveal * (3 - 2 * bottomReveal);
+      const opacity = 0.035 + easedReveal * 0.385;
+      mainRef.current?.style.setProperty("--knitting-bg-opacity", opacity.toFixed(3));
+      frame = 0;
+    };
+
+    const requestUpdate = () => {
+      if (!frame) frame = window.requestAnimationFrame(updateBackground);
+    };
+
+    updateBackground();
+    window.addEventListener("scroll", requestUpdate, { passive: true });
+    window.addEventListener("resize", requestUpdate);
+    return () => {
+      window.removeEventListener("scroll", requestUpdate);
+      window.removeEventListener("resize", requestUpdate);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, []);
 
   const visibleProducts = useMemo(
     () => catalogProducts.filter(
@@ -151,7 +182,8 @@ export default function Home() {
   }
 
   return (
-    <main>
+    <main ref={mainRef} className="site-main">
+      <div className="site-knitting-background" aria-hidden="true" />
       <header className="site-header">
         <a className="brand" href="#top" aria-label="חזרה לראש העמוד">
           <span className="brand-mark" aria-hidden="true">ק</span>
@@ -184,7 +216,9 @@ export default function Home() {
           <p className="eyebrow"><span /> נסרגות ביד על ידי גילת פורר</p>
           <h1>מכירת כיפות <em>למען קהילת קדמא</em></h1>
           <p className="hero-intro">
-            כל ההכנסות מוקדשות ללימוד תנ״ך להורים ולילדים ולתפילת הילדים.
+            לקראת פתיחת שנת הלימודים והחגים הבאים עלינו לטובה, זו הזדמנות להתחדש
+            בכיפה סרוגה בעבודת יד וגם לתרום לקהילה. כל ההכנסות מוקדשות ללימוד תנ״ך
+            להורים ולילדים ולתפילת הילדים בקהילת קדמא.
           </p>
           <div className="hero-actions">
             <a className="primary-button" href="#catalog">לבחירת כיפה <span aria-hidden="true">←</span></a>
@@ -225,7 +259,7 @@ export default function Home() {
         <i aria-hidden="true">✦</i>
         <div className="featured"><span>שלוש כיפות</span><strong>110 ש״ח</strong></div>
         <i aria-hidden="true">✦</i>
-        <div><span>מאה אחוז</span><strong>תרומה לקהילה</strong></div>
+        <div><span>כל ההכנסות</span><strong>תרומה לקהילה</strong></div>
       </section>
 
       <section className="catalog-section" id="catalog">
