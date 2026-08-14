@@ -16,8 +16,7 @@ export type Product = {
 
 export const products = catalogData as Product[];
 
-export const colorFamilies = [
-  "הכול",
+export const productColorFamilies = [
   "כחולים",
   "ירוקים",
   "חומים",
@@ -26,7 +25,9 @@ export const colorFamilies = [
   "סגולים",
   "שחורים",
   "בהירים",
-];
+] as const;
+
+export const colorFamilies = ["הכול", ...productColorFamilies];
 
 export function calculateTotal(selectedProducts: Product[]) {
   const regular = selectedProducts.filter((product) => !product.specialPrice);
