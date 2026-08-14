@@ -64,7 +64,7 @@ export default function Home() {
   useEffect(() => {
     let frame = 0;
 
-    const updateBackground = () => {
+    const updateScrollEffects = () => {
       const scrollRange = Math.max(
         1,
         document.documentElement.scrollHeight - window.innerHeight,
@@ -74,14 +74,18 @@ export default function Home() {
       const easedReveal = bottomReveal * bottomReveal * (3 - 2 * bottomReveal);
       const opacity = 0.035 + easedReveal * 0.385;
       mainRef.current?.style.setProperty("--knitting-bg-opacity", opacity.toFixed(3));
+      const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const heroZoomProgress = Math.min(1, Math.max(0, window.scrollY / 520));
+      const heroScale = prefersReducedMotion ? 1 : 1 + heroZoomProgress * 0.045;
+      mainRef.current?.style.setProperty("--hero-photo-scale", heroScale.toFixed(4));
       frame = 0;
     };
 
     const requestUpdate = () => {
-      if (!frame) frame = window.requestAnimationFrame(updateBackground);
+      if (!frame) frame = window.requestAnimationFrame(updateScrollEffects);
     };
 
-    updateBackground();
+    updateScrollEffects();
     window.addEventListener("scroll", requestUpdate, { passive: true });
     window.addEventListener("resize", requestUpdate);
     return () => {
@@ -234,14 +238,16 @@ export default function Home() {
         </div>
         <div className="hero-visual">
           <div className="hero-photo-wrap">
-            <Image
-              src="/images/hero-knitting.jpg"
-              alt="סריגת כיפה בעבודת יד"
-              fill
-              priority
-              unoptimized
-              sizes="(max-width: 760px) 44vw, 25vw"
-            />
+            <div className="hero-photo-media">
+              <Image
+                src="/images/hero-knitting.jpg"
+                alt="סריגת כיפה בעבודת יד"
+                fill
+                priority
+                unoptimized
+                sizes="(max-width: 760px) 100vw, 430px"
+              />
+            </div>
           </div>
           <div className="handmade-seal" aria-label="נסרג ביד על ידי גילת פורר">
             <span>נסרג ביד</span>
