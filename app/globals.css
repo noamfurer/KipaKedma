@@ -2160,7 +2160,7 @@ footer a {
     radial-gradient(circle at 8% 20%, rgba(214, 162, 49, 0.14), transparent 22%),
     linear-gradient(135deg, rgba(251, 247, 239, 0.94) 0%, rgba(244, 236, 220, 0.92) 100%);
   column-gap: clamp(42px, 6vw, 96px);
-  grid-template-columns: minmax(330px, 430px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(330px, 430px);
   min-height: 0;
   padding: 104px clamp(24px, 7vw, 112px) 58px;
 }
@@ -2180,7 +2180,7 @@ footer a {
 }
 
 .hero-copy {
-  grid-column: 2;
+  grid-column: 1;
   grid-row: 1;
   max-width: 920px;
   padding-left: 0;
@@ -2254,7 +2254,7 @@ footer a {
 }
 
 .hero-visual {
-  grid-column: 1;
+  grid-column: 2;
   grid-row: 1;
   justify-self: start;
   max-width: 430px;
@@ -2505,7 +2505,7 @@ footer > * {
 @media (max-width: 1050px) {
   .hero {
     column-gap: 38px;
-    grid-template-columns: minmax(270px, 330px) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(270px, 330px);
   }
 
   .hero-copy {
