@@ -1,4 +1,4 @@
-import type { Product } from "../../../catalog";
+import { productColorFamilies, type Product } from "../../../catalog";
 import {
   catalogStore,
   clearProductReservation,
@@ -42,6 +42,7 @@ type ProductUpdatePayload = {
   sku?: string;
   diameter?: number;
   price?: number;
+  colorFamily?: string;
 };
 
 type ProductStatusPayload = {
@@ -83,6 +84,7 @@ function productOverride(product: Product, updatedAt: string): ProductOverride {
     sku: product.sku,
     diameter: product.diameter,
     price: product.price,
+    colorFamily: product.colorFamily,
     enabled: product.enabled,
     updatedAt,
   };
@@ -144,6 +146,7 @@ export async function PATCH(request: Request) {
   const sku = payload.sku?.trim().toUpperCase().slice(0, 32) ?? "";
   const diameter = Number(payload.diameter);
   const price = Number(payload.price);
+  const colorFamily = payload.colorFamily?.trim() ?? "";
   const products = await loadCatalogProducts();
   const current = products.find((product) => product.id === id);
 
@@ -172,6 +175,9 @@ export async function PATCH(request: Request) {
   if (!Number.isInteger(price) || price < 1 || price > 5000) {
     return Response.json({ error: "המחיר צריך להיות מספר שלם בין 1 ל-5000." }, { status: 400 });
   }
+  if (!(productColorFamilies as readonly string[]).includes(colorFamily)) {
+    return Response.json({ error: "יש לבחור קטגוריית צבע תקינה." }, { status: 400 });
+  }
 
   const updatedAt = new Date().toISOString();
   const nextProduct: Product = {
@@ -180,6 +186,7 @@ export async function PATCH(request: Request) {
     sku,
     diameter,
     price,
+    colorFamily,
     specialPrice: price !== 40,
   };
   const store = catalogStore();
