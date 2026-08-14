@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, type CSSProperties, useEffect, useMemo, useState } from "react";
+import { FormEvent, type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { calculateTotal, colorFamilies, products, type Product } from "./catalog";
+import AdminPanel from "./AdminPanel";
 
 const WHATSAPP_NUMBER = "972505782058";
 
@@ -14,23 +15,31 @@ export default function Home() {
   const [activeFamily, setActiveFamily] = useState("הכול");
   const [selectedSkus, setSelectedSkus] = useState<string[]>([]);
   const [reservedSkus, setReservedSkus] = useState<Set<string>>(new Set());
+  const [availabilityStatus, setAvailabilityStatus] = useState<"loading" | "ready" | "error">("loading");
   const [cartOpen, setCartOpen] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formMessage, setFormMessage] = useState("");
+  const [adminOpen, setAdminOpen] = useState(false);
+
+  const loadAvailability = useCallback(async () => {
+    try {
+      const response = await fetch("/api/reservations", { cache: "no-store" });
+      if (!response.ok) throw new Error("availability");
+      const data = (await response.json()) as { reservedSkus?: string[] };
+      setReservedSkus(new Set(data.reservedSkus ?? []));
+      setAvailabilityStatus("ready");
+    } catch {
+      setAvailabilityStatus("error");
+    }
+  }, []);
 
   useEffect(() => {
-    fetch("/api/reservations", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : Promise.reject()))
-      .then((data: { reservedSkus?: string[] }) => {
-        setReservedSkus(new Set(data.reservedSkus ?? []));
-      })
-      .catch(() => {
-        // The catalog remains usable if availability has not loaded yet.
-      });
-  }, []);
+    const timer = window.setTimeout(() => void loadAvailability(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadAvailability]);
 
   useEffect(() => {
     document.body.classList.toggle("drawer-is-open", cartOpen);
@@ -38,11 +47,12 @@ export default function Home() {
   }, [cartOpen]);
 
   const visibleProducts = useMemo(
-    () =>
-      activeFamily === "הכול"
-        ? products
-        : products.filter((product) => product.colorFamily === activeFamily),
-    [activeFamily],
+    () => products.filter(
+      (product) =>
+        !reservedSkus.has(product.sku) &&
+        (activeFamily === "הכול" || product.colorFamily === activeFamily),
+    ),
+    [activeFamily, reservedSkus],
   );
 
   const selectedProducts = useMemo(
@@ -139,10 +149,16 @@ export default function Home() {
           <a href="#catalog">הכיפות</a>
           <a href="#donation">התרומה</a>
         </nav>
-        <button className="header-cart" type="button" onClick={() => setCartOpen(true)}>
-          הבחירה שלי
-          <span>{selectedSkus.length}</span>
-        </button>
+        <div className="header-actions">
+          <button className="settings-button" type="button" onClick={() => setAdminOpen(true)} aria-label="פתיחת הגדרות">
+            <span aria-hidden="true">⚙</span>
+            <small>הגדרות</small>
+          </button>
+          <button className="header-cart" type="button" onClick={() => setCartOpen(true)}>
+            הבחירה שלי
+            <span>{selectedSkus.length}</span>
+          </button>
+        </div>
       </header>
 
       <section className="hero" id="top">
@@ -221,8 +237,24 @@ export default function Home() {
           ))}
         </div>
 
-        <div className="product-grid">
-          {visibleProducts.map((product, index) => {
+        {availabilityStatus === "loading" ? (
+          <div className="availability-state" role="status">
+            <span aria-hidden="true"><i /><i /><i /></span>
+            <p>בודקים אילו כיפות זמינות...</p>
+          </div>
+        ) : availabilityStatus === "error" ? (
+          <div className="availability-state error" role="alert">
+            <strong>לא הצלחנו לטעון את המלאי כרגע.</strong>
+            <p>כדי שלא תוצג בטעות כיפה שכבר נבחרה, הקטלוג ממתין לעדכון.</p>
+            <button type="button" onClick={() => {
+              setAvailabilityStatus("loading");
+              void loadAvailability();
+            }}>ניסיון נוסף</button>
+          </div>
+        ) : (
+          <>
+            <div className="product-grid">
+              {visibleProducts.map((product, index) => {
             const selected = selectedSkus.includes(product.sku);
             const reserved = reservedSkus.has(product.sku);
             return (
@@ -266,8 +298,17 @@ export default function Home() {
                 </div>
               </article>
             );
-          })}
-        </div>
+              })}
+            </div>
+            {visibleProducts.length === 0 && (
+              <div className="catalog-empty">
+                <span aria-hidden="true">○</span>
+                <strong>כל הכיפות בקבוצת הצבע הזו כבר נבחרו</strong>
+                <p>אפשר לבחור קבוצת צבע אחרת ולראות רק את הכיפות הפעילות.</p>
+              </div>
+            )}
+          </>
+        )}
       </section>
 
       <section className="story-section" id="story">
@@ -368,6 +409,18 @@ export default function Home() {
           </aside>
         </div>
       )}
+
+      <AdminPanel
+        open={adminOpen}
+        onClose={() => setAdminOpen(false)}
+        onRestore={(sku) => {
+          setReservedSkus((current) => {
+            const next = new Set(current);
+            next.delete(sku);
+            return next;
+          });
+        }}
+      />
     </main>
   );
 }
