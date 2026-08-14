@@ -8,7 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import type { Product } from "./catalog";
+import { productColorFamilies, type Product } from "./catalog";
 
 type ReservationRequest = {
   id: string;
@@ -59,6 +59,7 @@ type ProductEditorProps = {
     sku: string;
     price: number;
     diameter: number;
+    colorFamily: string;
   }) => Promise<void>;
   onToggle: (product: AdminProduct) => Promise<void>;
 };
@@ -84,6 +85,7 @@ function ProductEditor({
   const [sku, setSku] = useState(product.sku);
   const [price, setPrice] = useState(String(product.price));
   const [diameter, setDiameter] = useState(String(product.diameter));
+  const [colorFamily, setColorFamily] = useState(product.colorFamily);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -93,6 +95,7 @@ function ProductEditor({
       sku,
       price: Number(price),
       diameter: Number(diameter),
+      colorFamily,
     });
   }
 
@@ -148,6 +151,14 @@ function ProductEditor({
           <label>
             קוטר בס״מ
             <input value={diameter} onChange={(event) => setDiameter(event.target.value)} type="number" min="1" max="50" step="0.1" required />
+          </label>
+          <label>
+            קטגוריית צבע
+            <select value={colorFamily} onChange={(event) => setColorFamily(event.target.value)} required>
+              {productColorFamilies.map((family) => (
+                <option key={family} value={family}>{family}</option>
+              ))}
+            </select>
           </label>
         </div>
 
@@ -258,6 +269,7 @@ export default function AdminPanel({
     sku: string;
     price: number;
     diameter: number;
+    colorFamily: string;
   }) {
     setBusyProductId(payload.id);
     setMessage("");
@@ -367,12 +379,12 @@ export default function AdminPanel({
                 <small>{data?.products.length ?? 0} פריטים</small>
               </div>
               <p className="admin-section-help">
-                שינוי שם, מחיר, קוטר או מק״ט נשמר מיד במסד הנתונים. הפעלת כיפה שנבחרה מחזירה אותה למלאי.
+                שינוי שם, מחיר, קוטר, מק״ט או קטגוריית צבע נשמר מיד במסד הנתונים. הפעלת כיפה שנבחרה מחזירה אותה למלאי.
               </p>
               <div className="admin-product-grid">
                 {data?.products.map((product) => (
                   <ProductEditor
-                    key={`${product.id}-${product.name}-${product.sku}-${product.price}-${product.diameter}-${product.available}`}
+                    key={`${product.id}-${product.name}-${product.sku}-${product.price}-${product.diameter}-${product.colorFamily}-${product.available}`}
                     product={product}
                     customer={product.reservation ? requestsById.get(product.reservation.requestId) : undefined}
                     busy={busyProductId === product.id}
