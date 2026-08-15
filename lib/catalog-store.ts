@@ -1,13 +1,23 @@
 import { getStore } from "@netlify/blobs";
-import { products as defaultProducts, type Product } from "../app/catalog";
+import {
+  productColorFamilies,
+  products as defaultProducts,
+  type Product,
+} from "../app/catalog";
 
 export const CATALOG_STORE_NAME = "kipa-kedma-catalog";
 export const RESERVATIONS_STORE_NAME = "kipa-kedma-reservations";
+export const CATALOG_CATEGORIES_KEY = "settings/color-families";
 
 export type ProductOverride = Pick<
   Product,
   "name" | "sku" | "diameter" | "price" | "enabled" | "colorFamily"
 > & {
+  updatedAt: string;
+};
+
+type CatalogCategorySettings = {
+  categories: string[];
   updatedAt: string;
 };
 
@@ -35,6 +45,27 @@ export function productOverrideKey(productId: string) {
 
 export function reservationKeyForProduct(productId: string) {
   return `reserved-id/${productId}`;
+}
+
+export async function loadCatalogCategories() {
+  const settings = (await catalogStore().get(CATALOG_CATEGORIES_KEY, {
+    type: "json",
+  })) as CatalogCategorySettings | null;
+  const categories = settings?.categories
+    ?.map((category) => category.trim())
+    .filter(Boolean);
+
+  return categories?.length
+    ? [...new Set(categories)]
+    : [...productColorFamilies];
+}
+
+export async function saveCatalogCategories(categories: string[]) {
+  const normalized = [...new Set(categories.map((category) => category.trim()).filter(Boolean))];
+  await catalogStore().setJSON(CATALOG_CATEGORIES_KEY, {
+    categories: normalized,
+    updatedAt: new Date().toISOString(),
+  } satisfies CatalogCategorySettings);
 }
 
 export function defaultProduct(productId: string) {
