@@ -1,11 +1,13 @@
-import { productColorFamilies, type Product } from "../../../catalog";
+import { type Product } from "../../../catalog";
 import {
   catalogStore,
   clearProductReservation,
+  loadCatalogCategories,
   loadCatalogProducts,
   loadProductReservations,
   productOverrideKey,
   reservationsStore,
+  saveCatalogCategories,
   type ProductOverride,
 } from "../../../../lib/catalog-store";
 import {
@@ -48,6 +50,12 @@ type ProductUpdatePayload = {
 type ProductStatusPayload = {
   id?: string;
   active?: boolean;
+};
+
+type CategoryMutationPayload = {
+  action?: "create" | "rename" | "delete";
+  name?: string;
+  previousName?: string;
 };
 
 async function readEntries<T>(
@@ -100,14 +108,19 @@ function requireMutationAccess(request: Request) {
   return null;
 }
 
+function normalizeCategoryName(value?: string) {
+  return value?.trim().replace(/\s+/g, " ").slice(0, 40) ?? "";
+}
+
 export async function GET(request: Request) {
   if (!isAdminRequest(request)) {
     return Response.json({ authenticated: false }, { status: 401 });
   }
 
   const store = reservationsStore();
-  const [products, requestEntries, releaseEntries] = await Promise.all([
+  const [products, categories, requestEntries, releaseEntries] = await Promise.all([
     loadCatalogProducts(),
+    loadCatalogCategories(),
     readEntries<ReservationRequest>(store, "requests/"),
     readEntries<ReleasedItem>(store, "releases/"),
   ]);
@@ -126,6 +139,7 @@ export async function GET(request: Request) {
   return Response.json(
     {
       authenticated: true,
+      categories,
       products: products.map((product) =>
         publicAdminProduct(product, reservationsByProductId.get(product.id)),
       ),
@@ -147,7 +161,10 @@ export async function PATCH(request: Request) {
   const diameter = Number(payload.diameter);
   const price = Number(payload.price);
   const colorFamily = payload.colorFamily?.trim() ?? "";
-  const products = await loadCatalogProducts();
+  const [products, categories] = await Promise.all([
+    loadCatalogProducts(),
+    loadCatalogCategories(),
+  ]);
   const current = products.find((product) => product.id === id);
 
   if (!current) {
@@ -175,7 +192,7 @@ export async function PATCH(request: Request) {
   if (!Number.isInteger(price) || price < 1 || price > 5000) {
     return Response.json({ error: "המחיר צריך להיות מספר שלם בין 1 ל-5000." }, { status: 400 });
   }
-  if (!(productColorFamilies as readonly string[]).includes(colorFamily)) {
+  if (!categories.includes(colorFamily)) {
     return Response.json({ error: "יש לבחור קטגוריית צבע תקינה." }, { status: 400 });
   }
 
@@ -206,6 +223,111 @@ export async function PATCH(request: Request) {
   return Response.json({
     product: publicAdminProduct(nextProduct, reservations[0]),
   });
+}
+
+export async function POST(request: Request) {
+  const accessError = requireMutationAccess(request);
+  if (accessError) return accessError;
+
+  const payload = (await request.json()) as CategoryMutationPayload;
+  const action = payload.action;
+  const name = normalizeCategoryName(payload.name);
+  const previousName = normalizeCategoryName(payload.previousName);
+  const [categories, products] = await Promise.all([
+    loadCatalogCategories(),
+    loadCatalogProducts(),
+  ]);
+
+  if (!action || !["create", "rename", "delete"].includes(action)) {
+    return Response.json({ error: "פעולת הקטגוריה אינה תקינה." }, { status: 400 });
+  }
+  if (name.length < 2) {
+    return Response.json(
+      { error: "שם הקטגוריה צריך לכלול לפחות שני תווים." },
+      { status: 400 },
+    );
+  }
+  if (name === "הכול") {
+    return Response.json(
+      { error: "השם ״הכול״ שמור למסנן הראשי." },
+      { status: 400 },
+    );
+  }
+
+  const store = catalogStore();
+  const updatedAt = new Date().toISOString();
+  let nextCategories = [...categories];
+
+  if (action === "create") {
+    if (categories.includes(name)) {
+      return Response.json({ error: "קטגוריה בשם הזה כבר קיימת." }, { status: 409 });
+    }
+    nextCategories.push(name);
+  }
+
+  if (action === "rename") {
+    if (!previousName || !categories.includes(previousName)) {
+      return Response.json({ error: "הקטגוריה המקורית לא נמצאה." }, { status: 404 });
+    }
+    if (name !== previousName && categories.includes(name)) {
+      return Response.json({ error: "קטגוריה בשם הזה כבר קיימת." }, { status: 409 });
+    }
+    if (name === previousName) {
+      return Response.json({ categories });
+    }
+
+    const affectedProducts = products.filter(
+      (product) => product.colorFamily === previousName,
+    );
+    await Promise.all(
+      affectedProducts.map((product) => {
+        const nextProduct = { ...product, colorFamily: name };
+        return store.setJSON(
+          productOverrideKey(product.id),
+          productOverride(nextProduct, updatedAt),
+        );
+      }),
+    );
+    nextCategories = categories.map((category) =>
+      category === previousName ? name : category,
+    );
+  }
+
+  if (action === "delete") {
+    if (!categories.includes(name)) {
+      return Response.json({ error: "הקטגוריה לא נמצאה." }, { status: 404 });
+    }
+    const assignedCount = products.filter(
+      (product) => product.colorFamily === name,
+    ).length;
+    if (assignedCount > 0) {
+      return Response.json(
+        {
+          error: `יש להעביר תחילה את ${assignedCount} הכיפות המשויכות לקטגוריה אחרת.`,
+        },
+        { status: 409 },
+      );
+    }
+    if (categories.length === 1) {
+      return Response.json(
+        { error: "חייבת להישאר לפחות קטגוריה אחת." },
+        { status: 409 },
+      );
+    }
+    nextCategories = categories.filter((category) => category !== name);
+  }
+
+  await saveCatalogCategories(nextCategories);
+  await store.setJSON(`changes/${crypto.randomUUID()}`, {
+    action: `category-${action}`,
+    name,
+    previousName: previousName || null,
+    before: categories,
+    after: nextCategories,
+    createdAt: updatedAt,
+  });
+
+  return Response.json({ categories: nextCategories });
 }
 
 export async function PUT(request: Request) {
