@@ -2569,6 +2569,78 @@ footer a {
   padding-block: clamp(78px, 8vw, 120px);
 }
 
+.sold-section {
+  background:
+    radial-gradient(circle at 10% 20%, rgba(23, 46, 45, 0.06), transparent 28%),
+    #e9e6df;
+  border-top: 1px solid rgba(23, 46, 45, 0.1);
+  padding: clamp(70px, 7vw, 105px) clamp(24px, 6vw, 92px);
+}
+
+.sold-section-heading {
+  align-items: end;
+  display: grid;
+  gap: 34px;
+  grid-template-columns: 1fr minmax(260px, 0.55fr);
+  margin-bottom: 34px;
+}
+
+.sold-section-heading h2 {
+  font-size: clamp(34px, 4vw, 54px);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  margin: 6px 0 0;
+}
+
+.sold-section-heading h2 em {
+  color: #676a67;
+  font-style: normal;
+  font-weight: 300;
+}
+
+.sold-section-heading > p {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.75;
+  margin: 0;
+}
+
+.sold-grid {
+  display: grid;
+  gap: clamp(14px, 1.7vw, 24px);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.sold-card,
+.sold-card:nth-child(3n + 2) {
+  filter: grayscale(1);
+  opacity: 0.76;
+  transform: none;
+}
+
+.sold-card:hover,
+.sold-card:nth-child(3n + 2):hover {
+  box-shadow: 0 12px 34px rgba(23, 46, 45, 0.07);
+  transform: none;
+}
+
+.sold-card:hover .product-image img {
+  transform: none;
+}
+
+.sold-card .reserved-overlay {
+  background: rgba(42, 46, 46, 0.5);
+}
+
+.sold-card .product-info > button {
+  color: #676a67;
+  cursor: not-allowed;
+}
+
+.sold-card .product-info > button span {
+  background: #676a67;
+}
+
 footer {
   background: rgba(23, 46, 45, 0.9);
   backdrop-filter: blur(2px);
@@ -2630,6 +2702,10 @@ footer > * {
   }
 
   .product-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .sold-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
@@ -2842,6 +2918,22 @@ footer > * {
   }
 
   .product-grid {
+    gap: 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sold-section {
+    padding: 62px 14px 76px;
+  }
+
+  .sold-section-heading {
+    align-items: stretch;
+    gap: 16px;
+    grid-template-columns: 1fr;
+    margin-bottom: 24px;
+  }
+
+  .sold-grid {
     gap: 12px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

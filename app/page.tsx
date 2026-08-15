@@ -118,6 +118,13 @@ export default function Home() {
     [catalogProducts, selectedProductIds],
   );
 
+  const soldProducts = useMemo(
+    () => catalogProducts.filter(
+      (product) => !product.enabled || unavailableProductIds.has(product.id),
+    ),
+    [catalogProducts, unavailableProductIds],
+  );
+
   const total = calculateTotal(selectedProducts);
 
   function toggleProduct(product: Product) {
@@ -406,6 +413,62 @@ export default function Home() {
           <article><span>ג</span><div><strong>בונים יחד</strong><p>חיזוק הפעילות המשפחתית והקהילתית</p></div></article>
         </div>
       </section>
+
+      {soldProducts.length > 0 && (
+        <section className="sold-section" aria-labelledby="sold-title">
+          <div className="sold-section-heading">
+            <div>
+              <p className="section-number">נבחרו באהבה</p>
+              <h2 id="sold-title">כיפות שכבר <em>נמכרו</em></h2>
+            </div>
+            <p>
+              הכיפות האלו כבר מצאו בית ואינן זמינות לרכישה, אבל הן נשארות כאן
+              כחלק מהפסיפס שנוצר למען קהילת קדמא.
+            </p>
+          </div>
+          <div className="sold-grid">
+            {soldProducts.map((product, index) => (
+              <article
+                className="product-card sold-card"
+                key={`sold-${product.id}`}
+                style={{ "--accent": product.accent, "--index": index } as CSSProperties}
+              >
+                <div className="product-image">
+                  <Image
+                    src={product.image}
+                    alt={`כיפה ${product.name} שנמכרה`}
+                    fill
+                    unoptimized
+                    sizes="(max-width: 760px) 46vw, (max-width: 1050px) 30vw, 22vw"
+                  />
+                  <span className="sku">{product.sku}</span>
+                  <div className="reserved-overlay">
+                    <strong>נמכרה</strong>
+                    <span>הכיפה אינה זמינה</span>
+                  </div>
+                </div>
+                <div className="product-info">
+                  <div className="product-title">
+                    <div>
+                      <p>{product.colorFamily}</p>
+                      <h3>{product.name}</h3>
+                    </div>
+                    <strong>{formatPrice(product.price)}</strong>
+                  </div>
+                  <div className="product-meta">
+                    <span><i className="color-dot" /> {product.colorLabel}</span>
+                    <span>קוטר {product.diameter} ס״מ</span>
+                  </div>
+                  <button type="button" disabled>
+                    נמכרה ואינה זמינה לבחירה
+                    <span aria-hidden="true">✓</span>
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       <footer>
         <div className="footer-brand"><span>ק</span><div><strong>קהילת קדמא</strong><small>יחד לומדים, מתפללים ובונים קהילה</small></div></div>

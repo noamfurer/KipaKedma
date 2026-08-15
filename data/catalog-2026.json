@@ -502,5 +502,17 @@
     "image": "/images/catalog-2026/kdm-142.jpg",
     "accent": "#9d713f",
     "enabled": true
+  },
+  {
+    "id": "catalog-2026-043",
+    "sku": "KDM-143",
+    "name": "ירוק זית תחרה",
+    "colorFamily": "ירוקים",
+    "colorLabel": "ירוק זית",
+    "diameter": 11.5,
+    "price": 40,
+    "image": "/images/catalog-2026/kdm-143.jpg",
+    "accent": "#7f841c",
+    "enabled": true
   }
 ]
