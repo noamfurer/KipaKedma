@@ -85,5 +85,25 @@ export function clearAdminSessionCookie() {
 
 export function requestHasValidOrigin(request: Request) {
   const origin = request.headers.get("origin");
-  return Boolean(origin && origin === new URL(request.url).origin);
+  if (!origin) return false;
+
+  try {
+    const originHost = new URL(origin).host.toLowerCase();
+    const forwardedHost = request.headers
+      .get("x-forwarded-host")
+      ?.split(",")[0]
+      ?.trim()
+      .toLowerCase();
+    const host = request.headers.get("host")?.trim().toLowerCase();
+    const requestHost = new URL(request.url).host.toLowerCase();
+    const allowedHosts = new Set(
+      [forwardedHost, host, requestHost].filter(
+        (value): value is string => Boolean(value),
+      ),
+    );
+
+    return allowedHosts.has(originHost);
+  } catch {
+    return false;
+  }
 }
