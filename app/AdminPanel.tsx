@@ -8,7 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { productColorFamilies, type Product } from "./catalog";
+import { type Product } from "./catalog";
 
 type ReservationRequest = {
   id: string;
@@ -38,6 +38,7 @@ type ReleasedItem = {
 
 type AdminData = {
   authenticated: true;
+  categories: string[];
   products: AdminProduct[];
   requests: ReservationRequest[];
   releases: ReleasedItem[];
@@ -51,6 +52,7 @@ type AdminPanelProps = {
 
 type ProductEditorProps = {
   product: AdminProduct;
+  categories: string[];
   customer?: ReservationRequest;
   busy: boolean;
   onSave: (payload: {
@@ -76,6 +78,7 @@ function formatDate(value: string) {
 
 function ProductEditor({
   product,
+  categories,
   customer,
   busy,
   onSave,
@@ -155,7 +158,7 @@ function ProductEditor({
           <label>
             קטגוריית צבע
             <select value={colorFamily} onChange={(event) => setColorFamily(event.target.value)} required>
-              {productColorFamilies.map((family) => (
+              {categories.map((family) => (
                 <option key={family} value={family}>{family}</option>
               ))}
             </select>
@@ -167,6 +170,60 @@ function ProductEditor({
         </button>
       </form>
     </article>
+  );
+}
+
+type CategoryEditorProps = {
+  name: string;
+  count: number;
+  busy: boolean;
+  onRename: (previousName: string, name: string) => Promise<void>;
+  onDelete: (name: string) => Promise<void>;
+};
+
+function CategoryEditor({
+  name: initialName,
+  count,
+  busy,
+  onRename,
+  onDelete,
+}: CategoryEditorProps) {
+  const [name, setName] = useState(initialName);
+
+  return (
+    <form
+      className="admin-category-card"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void onRename(initialName, name);
+      }}
+    >
+      <label>
+        שם הקטגוריה
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          minLength={2}
+          maxLength={40}
+          required
+        />
+      </label>
+      <span>{count} כיפות משויכות</span>
+      <div>
+        <button type="submit" disabled={busy || name.trim() === initialName}>
+          {busy ? "שומרת..." : "שמירת השם"}
+        </button>
+        <button
+          className="delete"
+          type="button"
+          disabled={busy || count > 0}
+          title={count > 0 ? "יש להעביר תחילה את כל הכיפות לקטגוריה אחרת" : undefined}
+          onClick={() => void onDelete(initialName)}
+        >
+          הסרת קטגוריה
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -182,6 +239,8 @@ export default function AdminPanel({
   const [messageKind, setMessageKind] = useState<"error" | "success">("error");
   const [loading, setLoading] = useState(false);
   const [busyProductId, setBusyProductId] = useState("");
+  const [busyCategory, setBusyCategory] = useState("");
+  const [newCategory, setNewCategory] = useState("");
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -227,6 +286,13 @@ export default function AdminPanel({
     () => new Map((data?.products ?? []).map((product) => [product.sku, product])),
     [data],
   );
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const product of data?.products ?? []) {
+      counts.set(product.colorFamily, (counts.get(product.colorFamily) ?? 0) + 1);
+    }
+    return counts;
+  }, [data]);
 
   if (!open) return null;
 
@@ -320,6 +386,63 @@ export default function AdminPanel({
     }
   }
 
+  async function mutateCategory(
+    payload: {
+      action: "create" | "rename" | "delete";
+      name: string;
+      previousName?: string;
+    },
+  ) {
+    const busyKey = payload.action === "create"
+      ? "__create__"
+      : payload.previousName ?? payload.name;
+    setBusyCategory(busyKey);
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/reservations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(result.error ?? "לא הצלחנו לעדכן את הקטגוריה.");
+      }
+      await refresh();
+      onCatalogChange();
+      setMessageKind("success");
+      setMessage(
+        payload.action === "create"
+          ? "הקטגוריה החדשה נוספה לקטלוג."
+          : payload.action === "rename"
+            ? "שם הקטגוריה וכל הכיפות המשויכות עודכנו."
+            : "הקטגוריה הוסרה מהקטלוג.",
+      );
+      return true;
+    } catch (error) {
+      setMessageKind("error");
+      setMessage(error instanceof Error ? error.message : "לא הצלחנו לעדכן את הקטגוריה.");
+      return false;
+    } finally {
+      setBusyCategory("");
+    }
+  }
+
+  async function createCategory(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const created = await mutateCategory({ action: "create", name: newCategory });
+    if (created) setNewCategory("");
+  }
+
+  async function renameCategory(previousName: string, name: string) {
+    await mutateCategory({ action: "rename", previousName, name });
+  }
+
+  async function deleteCategory(name: string) {
+    if (!window.confirm(`להסיר את הקטגוריה ״${name}״?`)) return;
+    await mutateCategory({ action: "delete", name });
+  }
+
   const activeCount = data?.products.filter((product) => product.available).length ?? 0;
   const inactiveCount = (data?.products.length ?? 0) - activeCount;
 
@@ -373,6 +496,44 @@ export default function AdminPanel({
 
             {message && <p className={`admin-message ${messageKind}`} role="status">{message}</p>}
 
+            <section className="admin-section admin-categories-section">
+              <div className="admin-section-title">
+                <div><span>סינון הקטלוג</span><h3>ניהול קטגוריות</h3></div>
+                <small>{data?.categories.length ?? 0} קטגוריות</small>
+              </div>
+              <p className="admin-section-help">
+                שינוי שם מעדכן אוטומטית גם את כל הכיפות המשויכות. כדי להסיר קטגוריה, יש להעביר תחילה את הכיפות שלה לקטגוריה אחרת.
+              </p>
+              <form className="admin-add-category" onSubmit={createCategory}>
+                <label>
+                  קטגוריה חדשה
+                  <input
+                    value={newCategory}
+                    onChange={(event) => setNewCategory(event.target.value)}
+                    placeholder="לדוגמה: צבעוניים"
+                    minLength={2}
+                    maxLength={40}
+                    required
+                  />
+                </label>
+                <button type="submit" disabled={Boolean(busyCategory)}>
+                  {busyCategory === "__create__" ? "מוסיפה..." : "הוספת קטגוריה"}
+                </button>
+              </form>
+              <div className="admin-category-grid">
+                {data?.categories.map((category) => (
+                  <CategoryEditor
+                    key={category}
+                    name={category}
+                    count={categoryCounts.get(category) ?? 0}
+                    busy={Boolean(busyCategory)}
+                    onRename={renameCategory}
+                    onDelete={deleteCategory}
+                  />
+                ))}
+              </div>
+            </section>
+
             <section className="admin-section admin-inventory-section">
               <div className="admin-section-title">
                 <div><span>מלאי</span><h3>עריכת כל הכיפות</h3></div>
@@ -386,6 +547,7 @@ export default function AdminPanel({
                   <ProductEditor
                     key={`${product.id}-${product.name}-${product.sku}-${product.price}-${product.diameter}-${product.colorFamily}-${product.available}`}
                     product={product}
+                    categories={data.categories}
                     customer={product.reservation ? requestsById.get(product.reservation.requestId) : undefined}
                     busy={busyProductId === product.id}
                     onSave={saveProduct}
