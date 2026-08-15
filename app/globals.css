@@ -1787,6 +1787,103 @@ footer a {
   margin: -5px 0 16px;
 }
 
+.admin-add-category {
+  align-items: end;
+  background: rgba(85, 125, 98, 0.08);
+  border: 1px solid rgba(85, 125, 98, 0.18);
+  border-radius: 14px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-bottom: 12px;
+  padding: 12px;
+}
+
+.admin-add-category label,
+.admin-category-card label {
+  color: var(--ink-soft);
+  display: flex;
+  flex-direction: column;
+  font-size: 8px;
+  gap: 5px;
+}
+
+.admin-add-category input,
+.admin-category-card input {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
+  min-width: 0;
+  outline: 0;
+  padding: 9px 10px;
+  width: 100%;
+}
+
+.admin-add-category input:focus,
+.admin-category-card input:focus {
+  border-color: var(--terracotta);
+  box-shadow: 0 0 0 3px rgba(197, 95, 66, 0.09);
+}
+
+.admin-add-category button,
+.admin-category-card button {
+  border: 1px solid var(--ink);
+  border-radius: 100px;
+  cursor: pointer;
+  font-size: 8px;
+  padding: 9px 12px;
+}
+
+.admin-add-category button {
+  background: var(--ink);
+  color: white;
+}
+
+.admin-category-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-category-card {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.admin-category-card > span {
+  color: var(--ink-soft);
+  font-size: 8px;
+}
+
+.admin-category-card > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.admin-category-card button {
+  background: transparent;
+  color: var(--ink);
+}
+
+.admin-category-card button.delete {
+  border-color: rgba(197, 95, 66, 0.3);
+  color: #8d3723;
+}
+
+.admin-add-category button:disabled,
+.admin-category-card button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .admin-product-grid {
   display: grid;
   gap: 13px;
@@ -2871,6 +2968,10 @@ footer > * {
 
   .admin-reserved-list,
   .admin-request-list {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-category-grid {
     grid-template-columns: 1fr;
   }
 
