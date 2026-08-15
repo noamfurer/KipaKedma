@@ -1,4 +1,5 @@
 import {
+  loadCatalogCategories,
   loadCatalogProducts,
   loadProductReservations,
 } from "../../../lib/catalog-store";
@@ -8,14 +9,17 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const products = await loadCatalogProducts();
+    const [products, categories] = await Promise.all([
+      loadCatalogProducts(),
+      loadCatalogCategories(),
+    ]);
     const reservations = await loadProductReservations(products);
     const unavailableProductIds = reservations.map(
       (reservation) => reservation.productId,
     );
 
     return Response.json(
-      { products, unavailableProductIds },
+      { products, categories, unavailableProductIds },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch {
