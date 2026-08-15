@@ -14,6 +14,7 @@ function formatPrice(value: number) {
 export default function Home() {
   const mainRef = useRef<HTMLElement>(null);
   const [activeFamily, setActiveFamily] = useState("הכול");
+  const [catalogFamilies, setCatalogFamilies] = useState<string[]>(colorFamilies);
   const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [unavailableProductIds, setUnavailableProductIds] = useState<Set<string>>(new Set());
@@ -32,11 +33,15 @@ export default function Home() {
       if (!response.ok) throw new Error("availability");
       const data = (await response.json()) as {
         products?: Product[];
+        categories?: string[];
         unavailableProductIds?: string[];
       };
       const nextProducts = data.products ?? [];
+      const nextFamilies = ["הכול", ...(data.categories ?? colorFamilies.slice(1))];
       const nextUnavailable = new Set(data.unavailableProductIds ?? []);
       setCatalogProducts(nextProducts);
+      setCatalogFamilies(nextFamilies);
+      setActiveFamily((current) => nextFamilies.includes(current) ? current : "הכול");
       setUnavailableProductIds(nextUnavailable);
       setSelectedProductIds((current) =>
         current.filter((id) =>
@@ -281,7 +286,7 @@ export default function Home() {
         </div>
 
         <div className="filters" role="group" aria-label="סינון לפי צבע">
-          {colorFamilies.map((family) => (
+          {catalogFamilies.map((family) => (
             <button
               key={family}
               type="button"
