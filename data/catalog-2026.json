@@ -514,5 +514,17 @@
     "image": "/images/catalog-2026/kdm-143.jpg",
     "accent": "#7f841c",
     "enabled": true
+  },
+  {
+    "id": "catalog-2026-044",
+    "sku": "KDM-144",
+    "name": "כחול לבנדר קלאסי",
+    "colorFamily": "כחולים",
+    "colorLabel": "כחול לבנדר",
+    "diameter": 12.5,
+    "price": 40,
+    "image": "/images/catalog-2026/kdm-144.jpg",
+    "accent": "#8297c1",
+    "enabled": true
   }
 ]
